@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "Déjà View - Memory Reconstruction for the Web",
+  "version": "1.0.0",
+  "description": "Find that webpage you vaguely remember using AI-powered memory reconstruction",
+  "permissions": [
+    "storage",
+    "unlimitedStorage",
+    "tabs",
+    "activeTab",
+    "scripting",
+    "webNavigation",
+    "contextMenus"
+  ],
+  "optional_permissions": [
+    "history",
+    "bookmarks"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "action": {
+    "default_title": "Déjà View - Find your memories"
+  },
+  "commands": {
+    "quick-search": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+D",
+        "mac": "Command+Shift+D"
+      },
+      "description": "Open quick memory search"
+    }
+  },
+  "minimum_chrome_version": "127"
+}

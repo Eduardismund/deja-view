@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Production
+dist/
+build/
+out/
+
+# Testing
+coverage/
+.nyc_output
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*~
+
+# OS files
+Thumbs.db
+Desktop.ini
+
+# Package manager
+.npm
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Chrome extension specific
+*.pem
+*.crx
+*.zip
+
+# TypeScript
+*.tsbuildinfo
+
+# Temporary files
+tmp/
+temp/
+.cache/
