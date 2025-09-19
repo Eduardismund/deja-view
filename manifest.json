@@ -10,20 +10,29 @@
     "activeTab",
     "scripting",
     "webNavigation",
-    "contextMenus"
+    "contextMenus",
+    "history"
   ],
   "optional_permissions": [
-    "history",
     "bookmarks"
   ],
   "host_permissions": [
     "<all_urls>"
   ],
   "background": {
-    "service_worker": "src/background/service-worker.js"
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["src/content/capture.js"],
+      "run_at": "document_idle"
+    }
+  ],
   "action": {
-    "default_title": "Déjà View - Find your memories"
+    "default_title": "Déjà View - Find your memories",
+    "default_popup": "src/popup/index.html"
   },
   "commands": {
     "quick-search": {

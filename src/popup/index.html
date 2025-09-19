@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Déjà View</title>
+  <style>
+    body {
+      width: 400px;
+      min-height: 500px;
+      padding: 20px;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    h1 {
+      font-size: 24px;
+      margin: 0 0 20px 0;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      font-size: 14px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    #results {
+      margin-top: 20px;
+    }
+    .memory {
+      padding: 10px;
+      border: 2px solid #eee;
+      border-radius: 5px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+    .memory:hover {
+      background: #f5f5f5;
+      transform: translateX(3px);
+    }
+    .memory.high-confidence {
+      border: 3px solid #FFD700;
+      background: linear-gradient(135deg, #fffdf5 0%, #fff 100%);
+      box-shadow: 0 2px 8px rgba(255, 215, 0, 0.2);
+    }
+    .memory.high-confidence:hover {
+      background: linear-gradient(135deg, #fffbf0 0%, #f5f5f5 100%);
+      box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+    }
+    .memory-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .memory-url {
+      font-size: 12px;
+      color: #666;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .confidence-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .confidence-high {
+      background: #FFD700;
+      color: #333;
+    }
+    .confidence-medium {
+      background: #4CAF50;
+      color: white;
+    }
+    .confidence-low {
+      background: #2196F3;
+      color: white;
+    }
+    #status {
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧠 Déjà View</h1>
+  <input type="text" id="searchInput" placeholder="Describe what you remember..." autofocus>
+  <div id="status"></div>
+  <div style="margin: 10px 0;">
+    <button id="viewAll" style="padding: 8px 12px; background: #4285f4; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; margin-right: 8px;">View All Memories</button>
+    <button id="clearAll" style="padding: 8px 12px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Clear All</button>
+  </div>
+  <div id="results"></div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
