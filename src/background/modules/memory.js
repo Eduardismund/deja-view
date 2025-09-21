@@ -6,9 +6,6 @@ export async function storePageMemory(snapshot) {
   await ensureDB();
   const db = getDB();
   
-  const themeCSS = snapshot.css ? await extractVisualTheme(snapshot.css) : '';
-  const pageSummary = snapshot.textContent ? await summarizePage(snapshot.textContent) : '';
-  
   const transaction = db.transaction(['memories'], 'readwrite');
   const store = transaction.objectStore('memories');
   
@@ -22,8 +19,6 @@ export async function storePageMemory(snapshot) {
         ...existing,
         html: snapshot.html,
         textContent: snapshot.textContent,
-        css: themeCSS,
-        summary: pageSummary,
         title: snapshot.title,
         lastVisit: snapshot.timestamp,
         timeSpent: (existing.timeSpent || 0) + snapshot.timeSpent,
@@ -31,6 +26,8 @@ export async function storePageMemory(snapshot) {
         viewport: snapshot.viewport
       };
       store.put(updated);
+      
+      processAIAsync(updated.id || existing.id, snapshot.css, snapshot.textContent);
     } else {
       const newMemory = {
         url: snapshot.url,
@@ -40,17 +37,51 @@ export async function storePageMemory(snapshot) {
         lastVisit: snapshot.timestamp,
         html: snapshot.html,
         textContent: snapshot.textContent,
-        css: themeCSS,
-        summary: pageSummary,
+        css: '',
+        summary: '',
         timeSpent: snapshot.timeSpent,
         visitCount: 1,
         viewport: snapshot.viewport
       };
-      store.add(newMemory);
+      
+      const addRequest = store.add(newMemory);
+      addRequest.onsuccess = () => {
+        const memoryId = addRequest.result;
+        processAIAsync(memoryId, snapshot.css, snapshot.textContent);
+      };
     }
   };
   
   cleanupOldMemories();
+}
+
+async function processAIAsync(memoryId, cssText, textContent) {
+  try {
+    const themeCSS = cssText ? await extractVisualTheme(cssText) : '';
+    const pageSummary = textContent ? await summarizePage(textContent) : '';
+    
+    await updateMemoryWithAI(memoryId, themeCSS, pageSummary);
+  } catch (error) {
+    console.error('[MEMORY] AI processing failed:', error);
+  }
+}
+
+async function updateMemoryWithAI(memoryId, themeCSS, pageSummary) {
+  const db = getDB();
+  if (!db) return;
+  
+  const transaction = db.transaction(['memories'], 'readwrite');
+  const store = transaction.objectStore('memories');
+  
+  const getRequest = store.get(memoryId);
+  getRequest.onsuccess = () => {
+    const memory = getRequest.result;
+    if (memory) {
+      memory.css = themeCSS;
+      memory.summary = pageSummary;
+      store.put(memory);
+    }
+  };
 }
 
 export async function cleanupOldMemories() {

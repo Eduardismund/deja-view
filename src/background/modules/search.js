@@ -1,22 +1,106 @@
-import { ensureDB, getDB } from './database.js';
-import { ensureAI } from './ai.js';
-import { extractTextFromHTML } from './memory.js';
-import { parseSearchQuery } from './queryParser.js';
+import {ensureDB, getDB} from './database.js';
+import {ensureAI} from './ai.js';
+import {extractTextFromHTML} from './memory.js';
+import {parseSearchQuery} from './queryParser.js';
 
-async function searchMemoriesWithContent(query, memories, locationHint = null, pageContext = null, isExactMatch = false) {
+async function findRelevantPages(memories, pageIdentification) {
+  const aiSession = await ensureAI();
+  if (!aiSession) return memories;
+  
+  const pageId = pageIdentification;
+  if (!pageId.domain && !pageId.pageContext && !pageId.visual) {
+    return memories;
+  }
+  
+  console.log('[SEARCH] Filtering by page identification:', pageId);
+  const beforeCount = memories.length;
+  
+  let filterPrompt = 'Filter these memories to pages that match the following criteria:\n\n';
+  const criteria = [];
+  
+  if (pageId.domain) {
+    criteria.push(`DOMAIN/SITE: "${pageId.domain}" - EXTREMELY IMPORTANT: ONLY match the domain field (hostname), NOT URL parameters. reddit must match www.reddit.com domain, NOT google.com URLs containing "reddit".`);
+  }
+  if (pageId.pageContext) {
+    criteria.push(`PAGE CONTENT: "${pageId.pageContext}" - Match against title and summary fields`);
+  }
+  if (pageId.visual) {
+    criteria.push(`VISUAL APPEARANCE: "${pageId.visual}" - Match against css color array`);
+  }
+  
+  filterPrompt += criteria.join('\n') + '\n\n';
+  filterPrompt += 'Instructions:\n';
+  filterPrompt += '- CRITICAL: If domain is specified, ONLY return pages whose DOMAIN FIELD contains that domain. NOT the full URL.\n';
+  filterPrompt += '- Check the "domain" field specifically - ignore domain mentions in URL parameters\n';
+  filterPrompt += '- Domain filtering is MANDATORY, and the main criteria - ignore summary relevance if domain does not match\n';
+  filterPrompt += '- Use title/summary for content relevance ONLY after domain requirements are met\n';
+  filterPrompt += '- Domain is a hard filter - summary cannot override domain mismatch\n';
+  
+  if (pageId.visual && !pageId.domain && !pageId.pageContext) {
+    filterPrompt += '- IMPORTANT: For visual-only searches, be inclusive - return pages that match the colors AND pages that might match\n';
+    filterPrompt += '- Include pages with matching colors, but also include uncertain matches\n';
+    filterPrompt += '- Return more results rather than fewer for visual searches\n\n';
+  } else {
+    filterPrompt += '- Return pages that match the criteria based on available information\n\n';
+  }
+  
+  
+  const memoryData = memories.map(m => {
+    return {
+      id: m.id,
+      title: m.title,
+      url: m.url,
+      domain: m.domain,
+      summary: m.summary,
+      css: m.css
+    };
+  });
+  
+  filterPrompt += `Memories: ${JSON.stringify(memoryData)}\n\nReturn array of matching memory IDs: [1, 2, 3]`;
+  
+  try {
+    const result = await aiSession.prompt(filterPrompt, {
+      responseConstraint: {
+        type: "array",
+        items: { type: "number" }
+      }
+    });
+    
+    const matchingIds = JSON.parse(result);
+    const filteredMemories = memories.filter(m => matchingIds.includes(m.id));
+    
+    console.log('[SEARCH] Page identification filter results:', {
+      before: beforeCount,
+      after: filteredMemories.length,
+      matchingIds,
+      criteria: criteria
+    });
+    
+    return filteredMemories.length === 0 ? memories : filteredMemories;
+  } catch (e) {
+    console.error('[SEARCH] Page identification filter failed:', e);
+    return memories;
+  }
+}
+
+async function findContentInPages(memories, contentLocation) {
+  if (memories.length === 0) return memories;
+  
+  if (!contentLocation.searchContent || contentLocation.searchContent === "") {
+    return memories;
+  }
+  
   const enhancedMemories = [];
   
   console.log('[SEARCH] Deep search with:', {
-    query,
-    locationHint,
-    pageContext,
-    isExactMatch,
-    memoriesCount: memories.length,
-    usingHtml: !!locationHint
+    query: contentLocation.searchContent,
+    locationHint: contentLocation.targetLocation,
+    isExactMatch: contentLocation.isExactMatch,
+    memoriesCount: memories.length
   });
   
   for (const memory of memories) {
-    if (locationHint && memory.html) {
+    if (contentLocation.targetLocation && memory.html) {
       enhancedMemories.push({
         ...memory, 
         content: memory.html
@@ -31,16 +115,16 @@ async function searchMemoriesWithContent(query, memories, locationHint = null, p
     }
   }
   
-  if (isExactMatch) {
-    console.log('[SEARCH] Attempting exact match search for:', query);
+  if (contentLocation.isExactMatch) {
+    console.log('[SEARCH] Attempting exact match search for:', contentLocation.searchContent);
     const exactMatches = [];
     
     for (const memory of enhancedMemories) {
-      if (memory.content && memory.content.toLowerCase().includes(query.toLowerCase())) {
+      if (memory.content && memory.content.toLowerCase().includes(contentLocation.searchContent.toLowerCase())) {
         exactMatches.push({
           ...memory,
           confidence: 100,
-          aiReason: `Exact match found: "${query}"`,
+          aiReason: `Exact match found: "${contentLocation.searchContent}"`,
           searchMethod: '🎯 Exact match'
         });
       }
@@ -54,13 +138,12 @@ async function searchMemoriesWithContent(query, memories, locationHint = null, p
     console.log('[SEARCH] No exact matches found, falling back to AI search');
   }
   
-  const searchPrompt = locationHint ? `
-    User is looking for: "${query}"
-    Target location: ${locationHint}
-    ${pageContext ? `Page should be about: ${pageContext}` : ''}
+  const searchPrompt = contentLocation.targetLocation ? `
+    User is looking for: "${contentLocation.searchContent}"
+    Target location: ${contentLocation.targetLocation}
     
     Find pages that match the context, then look for the target content in the specified location.
-    Focus on ${locationHint} sections that contain "${query}".
+    Focus on ${contentLocation.targetLocation} sections that contain "${contentLocation.searchContent}".
     
     Pages:
     ${JSON.stringify(enhancedMemories.map(m => ({
@@ -69,9 +152,9 @@ async function searchMemoriesWithContent(query, memories, locationHint = null, p
       content: m.content ? m.content.substring(0, 3000) : 'No content'
     })))}
     
-    Return: [{"id": 1, "confidence": 95, "reason": "Found '${query}' in ${locationHint}"}]
+    Return: [{"id": 1, "confidence": 95, "reason": "Found '${contentLocation.searchContent}' in ${contentLocation.targetLocation}"}]
   ` : `
-    User query: "${query}"
+    User query: "${contentLocation.searchContent}"
     
     Analyze each page content and rate 0-100 how well it matches the query.
     
@@ -124,7 +207,6 @@ async function searchMemoriesWithContent(query, memories, locationHint = null, p
     
     const filteredResults = relevantResults.filter(r => r.confidence >= 50);
     
-    
     const results = filteredResults
       .map(({id, confidence, reason}) => {
         const memory = enhancedMemories.find(m => m.id === id);
@@ -163,107 +245,20 @@ export async function searchMemories(query) {
       const aiSession = await ensureAI();
       
       if (!aiSession) {
-        const filtered = memories.filter(m => 
-          m.title?.toLowerCase().includes(query.toLowerCase())
-        ).slice(0, 10);
-        resolve(filtered);
+        console.error('[SEARCH] AI session not available');
+        resolve([]);
         return;
       }
       
-      if (queryInfo.domainHint) {
-        console.log('[SEARCH] Filtering by domain:', queryInfo.domainHint);
-        const beforeCount = memories.length;
-        
-        const domainFilterPrompt = `
-          Filter these memories to only sites matching: "${queryInfo.domainHint}"
-          
-          Memories: ${JSON.stringify(memories.map(m => ({
-            id: m.id,
-            domain: m.domain,
-            url: m.url,
-            title: m.title
-          })))}
-          
-          Return array of matching memory IDs: [1, 2, 3]
-        `;
-        
-        try {
-          const result = await aiSession.prompt(domainFilterPrompt, {
-            responseConstraint: {
-              type: "array",
-              items: { type: "number" }
-            }
-          });
-          
-          const matchingIds = JSON.parse(result);
-          memories = memories.filter(m => matchingIds.includes(m.id));
-          
-          console.log('[SEARCH] Domain filter results:', {
-            before: beforeCount,
-            after: memories.length,
-            matchingIds
-          });
-        } catch (e) {
-          console.error('[SEARCH] Domain filter failed:', e);
-        }
-      }
-
       try {
-        const searchQuery = queryInfo.pageContext || queryInfo.contentQuery;
+        let relevantPages = await findRelevantPages(memories, queryInfo.pageIdentification);
         
-        const memoryDescriptions = memories.slice(-100).map(m => ({
-          id: m.id,
-          title: m.title,
-          url: m.url,
-          domain: m.domain,
-          visitCount: m.visitCount || 1
-        }));
-
-        const searchPrompt = `
-          User query: "${searchQuery}"
-          
-          Find relevant pages from these memories:
-          ${JSON.stringify(memoryDescriptions)}
-          
-          Return JSON array of relevant IDs: [1, 2, 3]
-        `;
-
-        console.log('[SEARCH] Initial relevance check with', memoryDescriptions.length, 'memories');
+        let rankedMemories = await findContentInPages(relevantPages, queryInfo.contentLocation);
         
-        const result = await aiSession.prompt(searchPrompt, {
-          responseConstraint: {
-            type: "array",
-            items: { type: "number" }
-          }
-        });
-        
-        const relevantIds = JSON.parse(result);
-        console.log('[SEARCH] Found relevant IDs:', relevantIds);
-        
-        let rankedMemories = relevantIds
-          .map(id => memories.find(m => m.id === id))
-          .filter(Boolean);
-        
-        if (rankedMemories.length > 0) {
-          console.log('[SEARCH] Starting deep content search');
-          rankedMemories = await searchMemoriesWithContent(queryInfo.contentQuery, rankedMemories, queryInfo.locationHint, queryInfo.pageContext, queryInfo.isExactMatch);
-        }
-        
-        rankedMemories = rankedMemories.map(m => ({ ...m, searchQuery: query }));
-        
-        if (rankedMemories.length === 0) {
-          const fallback = memories.filter(m => 
-            m.title?.toLowerCase().includes(query.toLowerCase())
-          ).slice(0, 5);
-          resolve(fallback);
-        } else {
-          resolve(rankedMemories);
-        }
+        resolve(rankedMemories);
       } catch (error) {
-        const filtered = memories.filter(m => 
-          m.title?.toLowerCase().includes(query.toLowerCase())
-        ).slice(0, 10);
-        resolve(filtered);
+        console.error('[SEARCH] Search failed:', error);
+        resolve([]);
       }
     };
   });
