@@ -1,8 +1,13 @@
 import { ensureDB, getDB } from './database.js';
+import { extractVisualTheme } from './cssAnalyzer.js';
+import { summarizePage } from './summarizer.js';
 
 export async function storePageMemory(snapshot) {
   await ensureDB();
   const db = getDB();
+  
+  const themeCSS = snapshot.css ? await extractVisualTheme(snapshot.css) : '';
+  const pageSummary = snapshot.textContent ? await summarizePage(snapshot.textContent) : '';
   
   const transaction = db.transaction(['memories'], 'readwrite');
   const store = transaction.objectStore('memories');
@@ -17,6 +22,8 @@ export async function storePageMemory(snapshot) {
         ...existing,
         html: snapshot.html,
         textContent: snapshot.textContent,
+        css: themeCSS,
+        summary: pageSummary,
         title: snapshot.title,
         lastVisit: snapshot.timestamp,
         timeSpent: (existing.timeSpent || 0) + snapshot.timeSpent,
@@ -33,6 +40,8 @@ export async function storePageMemory(snapshot) {
         lastVisit: snapshot.timestamp,
         html: snapshot.html,
         textContent: snapshot.textContent,
+        css: themeCSS,
+        summary: pageSummary,
         timeSpent: snapshot.timeSpent,
         visitCount: 1,
         viewport: snapshot.viewport

@@ -14,6 +14,11 @@ import {
 } from './modules/ai.js';
 
 import { 
+  initSummarizer, 
+  getSummarizerStatus 
+} from './modules/summarizer.js';
+
+import { 
   storePageMemory 
 } from './modules/memory.js';
 
@@ -26,6 +31,7 @@ initDB();
 chrome.runtime.onInstalled.addListener(async () => {
   await initDB();
   await initAI();
+  await initSummarizer();
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
@@ -47,6 +53,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   if (request.type === 'GET_AI_STATUS') {
     getAIStatus().then(status => sendResponse(status));
+    return true;
+  }
+  
+  if (request.type === 'GET_SUMMARIZER_STATUS') {
+    getSummarizerStatus().then(status => sendResponse(status));
     return true;
   }
   

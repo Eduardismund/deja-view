@@ -42,6 +42,79 @@ function extractTextContent() {
   }
 }
 
+function extractPageCSS() {
+  try {
+    const colorInfo = [];
+    
+    const bodyStyle = window.getComputedStyle(document.body);
+    colorInfo.push(`body { background: ${bodyStyle.backgroundColor}; color: ${bodyStyle.color} }`);
+    
+    const selectors = [
+      'header', 'nav', 'main', 'footer',
+      '.hero', '[class*="hero"]',
+      'h1', 'h2', 'h3',
+      'button', '[class*="btn"]', 'a[class*="button"]',
+      '[class*="primary"]', '[class*="accent"]', '[class*="brand"]',
+      '.logo', '#logo', '[class*="logo"]',
+      '.card', '[class*="card"]',
+      '.navbar', '.nav-link'
+    ];
+    
+    selectors.forEach(selector => {
+      const elements = document.querySelectorAll(selector);
+      if (elements.length > 0) {
+        const el = elements[0];
+        if (el && el.offsetParent !== null) {
+          const rect = el.getBoundingClientRect();
+          const styles = window.getComputedStyle(el);
+          const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+          const size = rect.width * rect.height;
+          
+          if (styles.backgroundColor !== 'rgba(0, 0, 0, 0)' || styles.color) {
+            colorInfo.push(
+              `${selector} { ` +
+              `background: ${styles.backgroundColor}; ` +
+              `color: ${styles.color}; ` +
+              `/* size: ${Math.round(size)}px²; ` +
+              `visible: ${isVisible}; ` +
+              `count: ${elements.length} */ }`
+            );
+          }
+        }
+      }
+    });
+    
+    const rootStyles = window.getComputedStyle(document.documentElement);
+    const cssVars = [];
+    try {
+      Array.from(document.styleSheets).forEach(sheet => {
+        try {
+          Array.from(sheet.cssRules || []).forEach(rule => {
+            if (rule.selectorText === ':root' && rule.style) {
+              Array.from(rule.style).forEach(prop => {
+                if (prop.startsWith('--') && (prop.includes('color') || prop.includes('brand') || prop.includes('primary'))) {
+                  const value = rootStyles.getPropertyValue(prop);
+                  if (value) {
+                    cssVars.push(`${prop}: ${value}`);
+                  }
+                }
+              });
+            }
+          });
+        } catch {}
+      });
+    } catch {}
+    
+    if (cssVars.length > 0) {
+      colorInfo.push(`:root { ${cssVars.join('; ')} }`);
+    }
+    
+    return colorInfo.join('\n');
+  } catch (error) {
+    return '';
+  }
+}
+
 function capturePageSnapshot() {
   const snapshot = {
     url: window.location.href,
@@ -50,6 +123,7 @@ function capturePageSnapshot() {
     domain: window.location.hostname,
     html: document.documentElement.outerHTML,
     textContent: extractTextContent(),
+    css: extractPageCSS(),
     viewport: {
       width: window.innerWidth,
       height: window.innerHeight,
