@@ -17,8 +17,7 @@ async function searchMemoriesWithContent(query, memories, locationHint = null, p
   
   for (const memory of memories) {
     if (locationHint && memory.html) {
-      // Use full HTML when searching for specific locations
-      enhancedMemories.push({ 
+      enhancedMemories.push({
         ...memory, 
         content: memory.html
       });
@@ -32,7 +31,6 @@ async function searchMemoriesWithContent(query, memories, locationHint = null, p
     }
   }
   
-  // Try exact match first if requested
   if (isExactMatch) {
     console.log('[SEARCH] Attempting exact match search for:', query);
     const exactMatches = [];
